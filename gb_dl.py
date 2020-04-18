@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     raise
 
 try:
-    from clint.textui import progress
+    from clint.textui import progress, puts, indent
 except ModuleNotFoundError:
     print("### pip install clint ###")
     raise
@@ -62,12 +62,13 @@ params = {
     "sort": "publish_date:asc",
 }
 
-print("Retrieving Videos...")
+puts("Retrieving Videos...")
 response = requests.get(url, headers={"User-agent": "gb_dl"}, params=params)
 
 json = response.json()
 
-print(f"{json['number_of_total_results']} videos returned")
+with indent(2):
+    puts(f"{json['number_of_total_results']} videos returned")
 
 # extract the list of videos, and filter out unwanted shows
 videos = list(filter(show_filter, json["results"]))
@@ -81,19 +82,23 @@ if videos:
         video_date = x["publish_date"]
         target_URL = f"{x['high_url']}?api_key={api_key}"
 
-        print(f"Downloading {count} of {num_videos} - {file_name} : {video_date}...")
+        puts(f"Downloading {count} of {num_videos}...")
+        with indent(4, quote="  -"):
+            puts(f"{file_name} : {video_date}")
 
         r = requests.get(target_URL, stream=True)
         path = f"{directory}{file_name}"
         with open(path, "wb") as f:
             total_length = int(r.headers.get("content-length"))
-            for chunk in progress.bar(
-                r.iter_content(chunk_size=1024),
-                expected_size=(total_length / 1024) + 1,
-            ):
-                if chunk:
-                    f.write(chunk)
-                    f.flush()
+
+            with indent(4):
+                for chunk in progress.bar(
+                    r.iter_content(chunk_size=1024),
+                    expected_size=(total_length / 1024) + 1,
+                ):
+                    if chunk:
+                        f.write(chunk)
+                        f.flush()
 
         with open(f"{directory}gb_most_recent", "w") as f:
             f.write(video_date)
