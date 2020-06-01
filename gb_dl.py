@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     raise
 
 try:
-    from clint.textui import progress, puts, indent, colored
+    from clint.textui import progress, puts, indent, colored, prompt
 except ModuleNotFoundError:
     print("### pip install clint ###")
     raise
@@ -177,21 +177,15 @@ class GiantBombDownloader:
 
     # Handles user interrupt process
     def prompt_for_skip(self):
-        while True:
-            user_input = input("Do you want to skip the current video? (y/n)").lower()
+        user_input = prompt.options(
+            "Do you want to skip the current video?",
+            [
+                {"selector": "y", "prompt": "Skip Video", "return": True},
+                {"selector": "n", "prompt": "Do Not Skip Video", "return": False},
+            ],
+        )
 
-            if not (user_input == "y" or user_input == "n"):
-                puts(
-                    "Please enter either "
-                    + colored.cyan("y")
-                    + " or "
-                    + colored.cyan("n")
-                )
-                continue
-            else:
-                break
-
-        if user_input == "y":
+        if user_input:
             self.skip_current_video()
 
     # Iniitalise process
