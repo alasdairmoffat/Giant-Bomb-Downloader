@@ -33,13 +33,12 @@ def correct_file_name(name, extension):
     return f"{new_name}{extension}"
 
 
-unwanted_shows = [
-    "Giant Bombcast",
-    "The Giant Beastcast",
-]
-
 
 def show_filter(show):
+    unwanted_shows = [
+        "Giant Bombcast",
+        "The Giant Beastcast",
+    ]
     if show["video_show"] and show["video_show"]["title"] in unwanted_shows:
         return False
 
@@ -50,8 +49,10 @@ directory = "<directory>"
 
 now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-with open(f"{directory}gb_most_recent", "r") as f:
-    last_publish_date = datetime.datetime.strptime(f.read(), "%Y-%m-%d %H:%M:%S")
+with open(f"{directory}gb_most_recent", "r", encoding="utf-16") as f:
+    last_publish_date = datetime.datetime.strptime(
+        f.read().replace("\n", ""), "%Y-%m-%d %H:%M:%S"
+    )
 
 api_key = "<API KEY>"
 url = "https://www.giantbomb.com/api/videos/"
@@ -100,7 +101,7 @@ if videos:
                         f.write(chunk)
                         f.flush()
 
-        with open(f"{directory}gb_most_recent", "w") as f:
+        with open(f"{directory}gb_most_recent", "w", encoding="utf-16") as f:
             f.write(video_date)
 
 
