@@ -44,6 +44,8 @@ def get_json():
         for video in response_json["results"]
     ]
 
+    final_json.reverse()
+
     return final_json
 
 

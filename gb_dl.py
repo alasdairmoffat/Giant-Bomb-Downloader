@@ -1,6 +1,7 @@
-import json
 import pathlib
 import sqlite3
+import sys
+import os
 
 try:
     import requests
@@ -9,169 +10,206 @@ except ModuleNotFoundError:
     raise
 
 try:
-    from clint.textui import progress, puts, indent
+    from clint.textui import progress, puts, indent, colored
 except ModuleNotFoundError:
     print("### pip install clint ###")
     raise
 
 
-def correct_file_name(name, extension):
-    """Removes and substitutes characters that are invalid for filenames
+class GiantBombDownloader:
+    def __init__(self, api_key, directory):
+        self.__api_key = api_key
+        self.__directory = directory
+        self.__conn = sqlite3.connect(f"{self.__directory}gb_videos.db")
+        self.__cur = self.__conn.cursor()
+        self.__videos = []
+        self.__current_video = {}
 
-    Arguments:
-        name {string} -- name of video to be corrected
-        extension {string} -- filename extension
+    def __del__(self):
+        self.__conn.close()
 
-    Returns:
-        string -- corrected filename
-    """
-    char_replacements = {
-        ":": " -",
-        "/": "-",
-        '"': "'",
-        "\\": "",
-        "?": "",
-        "%": "",
-        "*": "",
-        "|": "",
-        "<": "",
-        ">": "",
-    }
+    @staticmethod
+    def correct_file_name(name, extension):
+        """Removes and substitutes characters that are invalid for filenames
 
-    new_name = name.translate(str.maketrans(char_replacements))
-    return f"{new_name}{extension}"
+      Arguments:
+          name {string} -- name of video to be corrected
+          extension {string} -- filename extension
 
-
-def check_database(url, conn):
-    """checks database for a given video url
-
-    Arguments:
-        url {string} -- url for video to be queried
-        conn {sqlite3 connection} -- connection to sqlite3 database
-
-    Returns:
-        boolean -- True if url already exists in database, False if not
-    """
-    cur = conn.cursor()
-    cur.execute(f"SELECT url FROM videos where url='{url}'")
-    return cur.fetchone() != None
-
-
-def insert_into_database(video, conn):
-    """inserts video data in to sqlite3 database
-
-    Arguments:
-        video {dict} -- dict containing data for video to be written
-        conn {sqlite3 connection} -- connection to sqlite3 database
-    """
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO videos(name, publish_date, url) VALUES(?,?,?)",
-        (video["name"], video["publish_date"], video["url"]),
-    )
-    conn.commit()
-
-
-def show_filter(show):
-    """checks if show is undesired type
-
-    Arguments:
-        show {dict} -- api response dict
-
-    Returns:
-        boolean -- True if video wanted, False if unwanted
-    """
-
-    unwanted_shows = [
-        "Giant Bombcast",
-        "The Giant Beastcast",
-    ]
-    return not (show["video_show"] and show["video_show"]["title"] in unwanted_shows)
-
-
-def query_api(api_key):
-    """queries giantbomb api for 100 most recent videos
-
-    Returns:
-        json -- response json
-    """
-
-    url = "https://www.giantbomb.com/api/videos/"
-    params = {
-        "api_key": api_key,
-        "format": "json",
-    }
-    response = requests.get(url, headers={"User-agent": "VideoSearch"}, params=params)
-
-    return response.json()
-
-
-def download_videos(videos, api_key, directory, conn):
-    """downloads videos
-
-    Arguments:
-        videos {list} -- list of videos to be downloaded
-        api_key {string} -- giantbomb api key
-        directory {string} -- target directory to be downloaded to
-        conn {sqlite3 connection} -- connection to sqlite3 database
-    """
-    num_videos = len(videos)
-
-    for count, video in enumerate(videos, start=1):
-        puts(f"Downloading {count} of {num_videos}...")
-        with indent(4, quote="  -"):
-            puts(f"{video['name']} : {video['publish_date']}")
-            puts(f"{video['url']}")
-
-        r = requests.get(f"{video['url']}?api_key={api_key}", stream=True)
-
-        with open(f"{directory}{video['name']}", "wb") as f:
-            total_length = int(r.headers.get("content-length"))
-
-            with indent(4):
-                for chunk in progress.bar(
-                    r.iter_content(chunk_size=1024),
-                    expected_size=(total_length / 1024) + 1,
-                ):
-                    if chunk:
-                        f.write(chunk)
-                        f.flush()
-
-        insert_into_database(video, conn)
-
-
-def main():
-    directory = "<directory>"
-    api_key = "<API KEY>"
-    conn = sqlite3.connect(f"{directory}gb_videos.db")
-
-    puts("Retrieving Videos...")
-    response_json = query_api(api_key)
-
-    videos_to_download = [
-        {
-            "name": correct_file_name(
-                video["name"], pathlib.Path(video["high_url"]).suffix
-            ),
-            "publish_date": video["publish_date"],
-            "url": video["high_url"],
+      Returns:
+          string -- corrected filename
+      """
+        char_replacements = {
+            ":": " -",
+            "/": "-",
+            '"': "'",
+            "\\": "",
+            "?": "",
+            "%": "",
+            "*": "",
+            "|": "",
+            "<": "",
+            ">": "",
         }
-        for video in response_json["results"]
-        if show_filter(video) and not check_database(video["high_url"], conn)
-    ]
 
-    # Download in chronological order
-    videos_to_download.reverse()
+        new_name = name.translate(str.maketrans(char_replacements))
+        return f"{new_name}{extension}"
 
-    with indent(2):
-        puts(f"{len(videos_to_download)} new videos")
+    @staticmethod
+    def filter_shows(video):
+        """checks if show is undesired type
 
-    if videos_to_download:
-        download_videos(videos_to_download, api_key, directory, conn)
+      Arguments:
+          show {dict} -- api response dict
 
-    conn.close()
-    puts("All videos downloaded")
+      Returns:
+          boolean -- True if video wanted, False if unwanted
+      """
+
+        unwanted_shows = [
+            "Giant Bombcast",
+            "The Giant Beastcast",
+        ]
+        return not (
+            video["video_show"] and video["video_show"]["title"] in unwanted_shows
+        )
+
+    def check_database(self, url):
+        """checks database for a given video url
+
+        Arguments:
+            url {string} -- url for video to be queried
+
+        Returns:
+            boolean -- True if url already exists in database, False if not
+        """
+        self.__cur.execute(f"SELECT url FROM videos where url='{url}'")
+        return self.__cur.fetchone() != None
+
+    def insert_into_database(self, video):
+        """inserts video data in to sqlite3 database
+
+        Arguments:
+            video {dict} -- dict containing data for video to be written
+        """
+        self.__cur.execute(
+            "INSERT INTO videos(name, publish_date, url) VALUES(?,?,?)",
+            (video["name"], video["publish_date"], video["url"]),
+        )
+        self.__conn.commit()
+
+    # queries api for 100 most recent videos and initiates download process
+    def query_api(self):
+
+        puts("Retrieving Videos...")
+
+        url = "https://www.giantbomb.com/api/videos/"
+        params = {
+            "api_key": self.__api_key,
+            "format": "json",
+        }
+        response = requests.get(
+            url, headers={"User-agent": "gb_dl"}, params=params
+        )
+
+        self.__videos = response.json()["results"]
+        self.parse_api_response()
+
+        with indent(2):
+            puts(f"{len(self.__videos)} new videos")
+
+        if self.__videos:
+            self.download_videos()
+
+        puts("All videos downloaded")
+
+    # Turns self.__videos into usable form
+    def parse_api_response(self):
+        self.__videos = [
+            {
+                "name": GiantBombDownloader.correct_file_name(
+                    video["name"], pathlib.Path(video["high_url"]).suffix
+                ),
+                "publish_date": video["publish_date"],
+                "url": video["high_url"],
+            }
+            for video in self.__videos
+            if GiantBombDownloader.filter_shows(video)
+            and not self.check_database(video["high_url"])
+        ]
+
+        # Put vidoes in chronological order
+        self.__videos.reverse()
+
+    # Downloads all videos in self.__videos
+    def download_videos(self):
+        num_videos = len(self.__videos)
+
+        for count, video in enumerate(self.__videos, start=1):
+            self.__current_video = video
+
+            puts(f"Downloading {count} of {num_videos}...")
+            with indent(4, quote="  -"):
+                puts(f"{video['name']} : {video['publish_date']}")
+                puts(f"{video['url']}")
+
+            r = requests.get(f"{video['url']}?api_key={self.__api_key}", stream=True)
+
+            with open(f"{self.__directory}{video['name']}", "wb") as f:
+                total_length = int(r.headers.get("content-length"))
+
+                with indent(4):
+                    for chunk in progress.bar(
+                        r.iter_content(chunk_size=1024),
+                        expected_size=(total_length / 1024) + 1,
+                    ):
+                        if chunk:
+                            f.write(chunk)
+                            f.flush()
+
+            self.insert_into_database(video)
+
+    def skip_current_video(self):
+        # Add videos details to database so it will not be downloaded in the future
+        self.insert_into_database(self.__current_video)
+        # Delete partially downloaded file
+        os.remove(f"{self.__directory}{self.__current_video['name']}")
+
+    # Handles user interrupt process
+    def prompt_for_skip(self):
+        while True:
+            user_input = input("Do you want to skip the current video? (y/n)").lower()
+
+            if not (user_input == "y" or user_input == "n"):
+                puts(
+                    "Please enter either "
+                    + colored.cyan("y")
+                    + " or "
+                    + colored.cyan("n")
+                )
+                continue
+            else:
+                break
+
+        if user_input == "y":
+            self.skip_current_video()
+
+    # Iniitalise process
+    def start(self):
+        try:
+            self.query_api()
+        except KeyboardInterrupt:
+            self.prompt_for_skip()
+            try:
+                sys.exit(0)
+            except SystemExit:
+                os._exit(0)
 
 
 if __name__ == "__main__":
-    main()
+    downloader = GiantBombDownloader(
+        api_key="<API KEY>",
+        directory="<directory>",
+    )
+
+    downloader.start()
