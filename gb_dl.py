@@ -1,6 +1,6 @@
-import datetime
+import json
 import pathlib
-import unicodedata
+import sqlite3
 
 try:
     import requests
@@ -16,6 +16,15 @@ except ModuleNotFoundError:
 
 
 def correct_file_name(name, extension):
+    """Removes and substitutes characters that are invalid for filenames
+
+    Arguments:
+        name {string} -- name of video to be corrected
+        extension {string} -- filename extension
+
+    Returns:
+        string -- corrected filename
+    """
     char_replacements = {
         ":": " -",
         "/": "-",
@@ -33,63 +42,90 @@ def correct_file_name(name, extension):
     return f"{new_name}{extension}"
 
 
+def check_database(url, conn):
+    """checks database for a given video url
+
+    Arguments:
+        url {string} -- url for video to be queried
+        conn {sqlite3 connection} -- connection to sqlite3 database
+
+    Returns:
+        boolean -- True if url already exists in database, False if not
+    """
+    cur = conn.cursor()
+    cur.execute(f"SELECT url FROM videos where url='{url}'")
+    return cur.fetchone() != None
+
+
+def insert_into_database(video, conn):
+    """inserts video data in to sqlite3 database
+
+    Arguments:
+        video {dict} -- dict containing data for video to be written
+        conn {sqlite3 connection} -- connection to sqlite3 database
+    """
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO videos(name, publish_date, url) VALUES(?,?,?)",
+        (video["name"], video["publish_date"], video["url"]),
+    )
+    conn.commit()
+
 
 def show_filter(show):
+    """checks if show is undesired type
+
+    Arguments:
+        show {dict} -- api response dict
+
+    Returns:
+        boolean -- True if video wanted, False if unwanted
+    """
+
     unwanted_shows = [
         "Giant Bombcast",
         "The Giant Beastcast",
     ]
-    if show["video_show"] and show["video_show"]["title"] in unwanted_shows:
-        return False
-
-    return True
+    return not (show["video_show"] and show["video_show"]["title"] in unwanted_shows)
 
 
-directory = "<directory>"
+def query_api(api_key):
+    """queries giantbomb api for 100 most recent videos
 
-now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    Returns:
+        json -- response json
+    """
 
-with open(f"{directory}gb_most_recent", "r", encoding="utf-16") as f:
-    last_publish_date = datetime.datetime.strptime(
-        f.read().replace("\n", ""), "%Y-%m-%d %H:%M:%S"
-    )
+    url = "https://www.giantbomb.com/api/videos/"
+    params = {
+        "api_key": api_key,
+        "format": "json",
+    }
+    response = requests.get(url, headers={"User-agent": "VideoSearch"}, params=params)
 
-api_key = "<API KEY>"
-url = "https://www.giantbomb.com/api/videos/"
-params = {
-    "api_key": api_key,
-    "format": "json",
-    "filter": f"publish_date:{last_publish_date + datetime.timedelta(seconds=1)}|{now}",
-    "sort": "publish_date:asc",
-}
+    return response.json()
 
-puts("Retrieving Videos...")
-response = requests.get(url, headers={"User-agent": "gb_dl"}, params=params)
 
-json = response.json()
+def download_videos(videos, api_key, directory, conn):
+    """downloads videos
 
-with indent(2):
-    puts(f"{json['number_of_total_results']} videos returned")
+    Arguments:
+        videos {list} -- list of videos to be downloaded
+        api_key {string} -- giantbomb api key
+        directory {string} -- target directory to be downloaded to
+        conn {sqlite3 connection} -- connection to sqlite3 database
+    """
+    num_videos = len(videos)
 
-# extract the list of videos, and filter out unwanted shows
-videos = list(filter(show_filter, json["results"]))
-
-num_videos = len(videos)
-
-if videos:
-    for count, x in enumerate(videos, start=1):
-        extension = pathlib.Path(x["high_url"]).suffix
-        file_name = correct_file_name(x["name"], extension)
-        video_date = x["publish_date"]
-        target_URL = f"{x['high_url']}?api_key={api_key}"
-
+    for count, video in enumerate(videos, start=1):
         puts(f"Downloading {count} of {num_videos}...")
         with indent(4, quote="  -"):
-            puts(f"{file_name} : {video_date}")
+            puts(f"{video['name']} : {video['publish_date']}")
+            puts(f"{video['url']}")
 
-        r = requests.get(target_URL, stream=True)
-        path = f"{directory}{file_name}"
-        with open(path, "wb") as f:
+        r = requests.get(f"{video['url']}?api_key={api_key}", stream=True)
+
+        with open(f"{directory}{video['name']}", "wb") as f:
             total_length = int(r.headers.get("content-length"))
 
             with indent(4):
@@ -101,8 +137,41 @@ if videos:
                         f.write(chunk)
                         f.flush()
 
-        with open(f"{directory}gb_most_recent", "w", encoding="utf-16") as f:
-            f.write(video_date)
+        insert_into_database(video, conn)
 
 
-print("All videos downloaded")
+def main():
+    directory = "<directory>"
+    api_key = "<API KEY>"
+    conn = sqlite3.connect(f"{directory}gb_videos.db")
+
+    puts("Retrieving Videos...")
+    response_json = query_api(api_key)
+
+    videos_to_download = [
+        {
+            "name": correct_file_name(
+                video["name"], pathlib.Path(video["high_url"]).suffix
+            ),
+            "publish_date": video["publish_date"],
+            "url": video["high_url"],
+        }
+        for video in response_json["results"]
+        if show_filter(video) and not check_database(video["high_url"], conn)
+    ]
+
+    # Download in chronological order
+    videos_to_download.reverse()
+
+    with indent(2):
+        puts(f"{len(videos_to_download)} new videos")
+
+    if videos_to_download:
+        download_videos(videos_to_download, api_key, directory, conn)
+
+    conn.close()
+    puts("All videos downloaded")
+
+
+if __name__ == "__main__":
+    main()
