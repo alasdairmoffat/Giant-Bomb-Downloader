@@ -16,10 +16,11 @@ except ModuleNotFoundError:
     raise
 
 
-class GiantBombDownloader:
-    def __init__(self, api_key, directory):
+class Giant_Bomb_Downloader:
+    def __init__(self, api_key, directory="", filter_titles=[]):
         self.__api_key = api_key
         self.__directory = directory
+        self.__filter_titles = filter_titles
         self.__conn = sqlite3.connect(f"{self.__directory}gb_videos.db")
         self.__cur = self.__conn.cursor()
         self.__videos = []
@@ -55,8 +56,7 @@ class GiantBombDownloader:
         new_name = name.translate(str.maketrans(char_replacements))
         return f"{new_name}{extension}"
 
-    @staticmethod
-    def filter_shows(video):
+    def filter_shows(self, video):
         """checks if show is undesired type
 
       Arguments:
@@ -66,12 +66,8 @@ class GiantBombDownloader:
           boolean -- True if video wanted, False if unwanted
       """
 
-        unwanted_shows = [
-            "Giant Bombcast",
-            "The Giant Beastcast",
-        ]
         return not (
-            video["video_show"] and video["video_show"]["title"] in unwanted_shows
+            video["video_show"] and video["video_show"]["title"] in self.__filter_titles
         )
 
     def check_database(self, url):
@@ -127,15 +123,14 @@ class GiantBombDownloader:
     def parse_api_response(self):
         self.__videos = [
             {
-                "name": GiantBombDownloader.correct_file_name(
+                "name": Giant_Bomb_Downloader.correct_file_name(
                     video["name"], pathlib.Path(video["high_url"]).suffix
                 ),
                 "publish_date": video["publish_date"],
                 "url": video["high_url"],
             }
             for video in self.__videos
-            if GiantBombDownloader.filter_shows(video)
-            and not self.check_database(video["high_url"])
+            if self.filter_shows(video) and not self.check_database(video["high_url"])
         ]
 
         # Put vidoes in chronological order
@@ -151,7 +146,6 @@ class GiantBombDownloader:
             puts(f"Downloading {count} of {num_videos}...")
             with indent(4, quote="  -"):
                 puts(f"{video['name']} : {video['publish_date']}")
-                puts(f"{video['url']}")
 
             r = requests.get(f"{video['url']}?api_key={self.__api_key}", stream=True)
 
@@ -201,9 +195,14 @@ class GiantBombDownloader:
 
 
 if __name__ == "__main__":
-    downloader = GiantBombDownloader(
+    downloader = Giant_Bomb_Downloader(
         api_key="<API KEY>",
         directory="<directory>",
+        filter_titles=[
+            "Giant Bombcast",
+            "The Giant Beastcast",
+            "Premium Podcasts",
+        ],
     )
 
     downloader.start()
