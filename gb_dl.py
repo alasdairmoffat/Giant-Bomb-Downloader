@@ -72,6 +72,7 @@ class Videos_Database:
         self.__cur.execute(
             (
                 "CREATE TABLE IF NOT EXISTS videos( "
+                "id int NOT NULL PRIMARY KEY, "
                 "name text NOT NULL, "
                 "publish_date text NOT NULL, "
                 "url text NOT NULL "
@@ -79,29 +80,30 @@ class Videos_Database:
             )
         )
 
-    def check_for_video(self, url):
-        """checks database for a given video url
+    def check_for_video(self, id):
+        """checks database for a given video id
 
         Arguments:
-            url {string} -- url for video to be queried
+            id {int} -- id for video to be queried
 
         Returns:
-            boolean -- True if url already exists in database, False if not
+            boolean -- True if id already exists in database, False if not
         """
         # fmt: off
         self.__cur.execute(
           (
-            "SELECT url FROM videos "
-            f"WHERE url='{url}';"
+            "SELECT id FROM videos "
+            f"WHERE id='{id}';"
           )
         )
         # fmt: on
         return self.__cur.fetchone() != None
 
-    def insert_video(self, name, publish_date, url):
+    def insert_video(self, id, name, publish_date, url):
         """inserts video data into database
 
         Args:
+            id (int): Video ID
             name (string): Name of video
             publish_date (string): Publish date of video
             url (string): url of video
@@ -109,10 +111,10 @@ class Videos_Database:
         # fmt: off
         self.__cur.execute(
             (
-                "INSERT INTO videos(name, publish_date, url) "
-                "VALUES(?,?,?)"
+                "INSERT INTO videos(id, name, publish_date, url) "
+                "VALUES(?,?,?,?)"
             ),
-            (name, publish_date, url),
+            (id, name, publish_date, url),
         )
         # fmt: on
 
@@ -140,6 +142,7 @@ class Giant_Bomb_Downloader:
         api_key,
         directory=pathlib.Path.cwd(),
         filter_titles=[],
+        video_quality="hd",
         days_back_to_start=7,
     ):
         """Queries Giant Bomb API for videos and downloads any not stored in local database of previously downloaded files.
@@ -153,6 +156,7 @@ class Giant_Bomb_Downloader:
         self.__api_key = api_key
         self.__directory = directory
         self.__filter_titles = filter_titles
+        self.__video_quality = video_quality
         self.__days_back_to_start = days_back_to_start
         self.__videos = []
         self.__current_video = {}
@@ -232,16 +236,18 @@ class Giant_Bomb_Downloader:
         """
         self.__videos = [
             {
+                "id": video["id"],
                 "name": Giant_Bomb_Downloader.correct_file_name(
-                    video["name"], pathlib.Path(video["high_url"]).suffix
+                    video["name"],
+                    pathlib.Path(video[f"{self.__video_quality}_url"]).suffix,
                 ),
                 "publish_date": video["publish_date"],
-                "url": video["high_url"],
+                "url": video[f"{self.__video_quality}_url"],
             }
             for video in self.__videos
             if not filter
             or self.filter_shows(video)
-            and not self.__database.check_for_video(video["high_url"])
+            and not self.__database.check_for_video(video["id"])
         ]
 
         # Put vidoes in chronological order
@@ -277,7 +283,7 @@ class Giant_Bomb_Downloader:
                 self.__database.insert_video(**video)
                 return
 
-            temp_file = file.parent / (file.name + ".part")
+            temp_file = file.parent / (f"{file.name}_{self.__video_quality}.part")
 
             already_downloaded = temp_file.stat().st_size if temp_file.exists() else 0
             file_mode = "ab" if already_downloaded else "wb"
@@ -294,9 +300,9 @@ class Giant_Bomb_Downloader:
             )
             r_length = int(r.headers.get("Content-length"))
             total_length = r_length + already_downloaded
+            # set chunk_size to 1MB
+            chunk_size = 1024 * 1024
             with open(temp_file, file_mode) as f:
-                # set chunk_size to 1MB
-                chunk_size = 1024 * 1024
                 with textui.indent(4):
                     for chunk in textui.progress.bar(
                         r.iter_content(chunk_size=chunk_size),
@@ -316,7 +322,10 @@ class Giant_Bomb_Downloader:
         """
         self.__database.insert_video(**self.__current_video)
         # Delete partially downloaded file
-        (self.__directory / (self.__current_video["name"] + ".part")).unlink()
+        (
+            self.__directory
+            / (f"{self.__current_video['name']}_{self.__video_quality}.part")
+        ).unlink()
 
     def prompt_for_skip(self):
         """Handles user interrupt process
@@ -356,12 +365,17 @@ class Giant_Bomb_Downloader:
 class Options:
     def __init__(self):
         self.__api_key = None
+        self.__video_quality = None
         self.__directory = None
         self.__filter_titles = []
         self.__days_back_to_start = None
 
         self.read_config_file()
         self.create_cli_args()
+
+    @staticmethod
+    def validate_video_quality(quality):
+        return quality in ["low", "high", "hd"]
 
     def read_config_file(self):
         """Reads options from config file if present
@@ -380,12 +394,24 @@ class Options:
             self.__directory = pathlib.Path(gb_dl["directory"])
         if "filter_titles" in gb_dl:
             self.__filter_titles = gb_dl["filter_titles"].split("\n")
+        if "video_quality" in gb_dl and Options.validate_video_quality(
+            gb_dl["video_quality"]
+        ):
+            self.__video_quality = gb_dl["video_quality"]
         if "days_back_to_start" in gb_dl:
             self.__days_back_to_start = gb_dl["days_back_to_start"]
 
     def create_cli_args(self):
         """Handles cli argument parsing
         """
+
+        def check_quality(value):
+            if not Options.validate_video_quality(value):
+                raise argparse.ArgumentTypeError(
+                    "videoquality must be 'low', 'high' or 'hd'"
+                )
+            return value
+
         parser = argparse.ArgumentParser(description="Download from Giant Bomb")
         parser.add_argument("-a", "--apikey", help="Giant Bomb API key", required=False)
         parser.add_argument(
@@ -399,6 +425,13 @@ class Options:
             "--filtertitles",
             help="List of show titles to skip seperated by commas (Wrap in '' if spaces required)",
             required=False,
+        )
+        parser.add_argument(
+            "-q",
+            "--videoquality",
+            help="Video quality ('low', 'high' or 'hd')",
+            required=False,
+            type=check_quality,
         )
         parser.add_argument(
             "-s",
@@ -416,6 +449,8 @@ class Options:
             self.__directory = pathlib.Path(args.directory)
         if args.filtertitles:
             self.__filter_titles = args.filtertitles.split(",")
+        if args.videoquality:
+            self.__video_quality = args.videoquality
         if args.daysbacktostart:
             self.__days_back_to_start = args.daysbacktostart
 
@@ -429,6 +464,7 @@ class Options:
             "api_key": self.__api_key,
             "directory": self.__directory,
             "filter_titles": self.__filter_titles,
+            "video_quality": self.__video_quality,
             "days_back_to_start": self.__days_back_to_start,
         }
 
