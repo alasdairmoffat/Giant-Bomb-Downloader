@@ -270,35 +270,53 @@ class Giant_Bomb_Downloader:
 
         for count, video in enumerate(self.__videos, start=1):
             self.__current_video = video
+            file = self.__directory / video["name"]
+
+            # Skip download if file already exists
+            if file.exists():
+                self.__database.insert_video(**video)
+                return
+
+            temp_file = file.parent / (file.name + ".part")
+
+            already_downloaded = temp_file.stat().st_size if temp_file.exists() else 0
+            file_mode = "ab" if already_downloaded else "wb"
 
             textui.puts(f"Downloading {count} of {num_videos}...")
             with textui.indent(4, quote="  -"):
                 textui.puts(f"{video['name']} : {video['publish_date']}")
 
+            params = {"api_key": self.__api_key}
+            headers = {"Range": f"bytes={already_downloaded}-"}
+
             r = requests.get(
-                video["url"], params={"api_key": self.__api_key}, stream=True
+                video["url"], params=params, headers=headers, stream=True, timeout=5
             )
-
-            with open(pathlib.Path(self.__directory) / video["name"], "wb") as f:
-                total_length = int(r.headers.get("content-length"))
-
+            r_length = int(r.headers.get("Content-length"))
+            total_length = r_length + already_downloaded
+            with open(temp_file, file_mode) as f:
+                # set chunk_size to 1MB
+                chunk_size = 1024 * 1024
                 with textui.indent(4):
                     for chunk in textui.progress.bar(
-                        r.iter_content(chunk_size=1024),
-                        expected_size=(total_length / 1024) + 1,
+                        r.iter_content(chunk_size=chunk_size),
+                        expected_size=(r_length / chunk_size) + 1,
                     ):
                         if chunk:
                             f.write(chunk)
                             f.flush()
 
-            self.__database.insert_video(**video)
+            # Rename file and add to database if fully downloaded
+            if total_length == temp_file.stat().st_size:
+                temp_file.rename(file)
+                self.__database.insert_video(**video)
 
     def skip_current_video(self):
         """Add videos details to database so it will not be downloaded in the future
         """
         self.__database.insert_video(**self.__current_video)
         # Delete partially downloaded file
-        (self.__directory / self.__current_video["name"]).unlink()
+        (self.__directory / (self.__current_video["name"] + ".part")).unlink()
 
     def prompt_for_skip(self):
         """Handles user interrupt process
