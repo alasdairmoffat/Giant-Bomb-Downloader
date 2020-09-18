@@ -280,8 +280,12 @@ class Giant_Bomb_Downloader:
 
             # Skip download if file already exists
             if file.exists():
+                textui.puts(f"Already downloaded {count} of {num_videos}.")
+                with textui.indent(4, quote=" -"):
+                    textui.puts(f"{video['name']} : {video['publish_date']}")
+
                 self.__database.insert_video(**video)
-                return
+                continue
 
             temp_file = file.parent / (f"{file.name}_{self.__video_quality}.part")
 
