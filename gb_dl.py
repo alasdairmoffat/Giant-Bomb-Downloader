@@ -385,7 +385,7 @@ class Options:
         """Reads options from config file if present
         """
         config = configparser.ConfigParser()
-        config.read("gb_dl.config")
+        config.read(pathlib.Path.home() / ".gb_dl/gb_dl.config")
 
         if "gb_dl" not in config:
             return
@@ -417,11 +417,16 @@ class Options:
             return value
 
         parser = argparse.ArgumentParser(description="Download from Giant Bomb")
-        parser.add_argument("-a", "--apikey", help="Giant Bomb API key", required=False)
+        parser.add_argument(
+            "-a",
+            "--apikey",
+            help="Giant Bomb API key available from https://www.giantbomb.com/api/",
+            required=False,
+        )
         parser.add_argument(
             "-d",
             "--directory",
-            help="Directory to store downloaded files",
+            help="Directory to store downloaded videos (Default: ./)",
             required=False,
         )
         parser.add_argument(
@@ -433,7 +438,7 @@ class Options:
         parser.add_argument(
             "-q",
             "--videoquality",
-            help="Video quality ('low', 'high' or 'hd')",
+            help="Video quality ('low', 'high' or 'hd') (Default: hd)",
             required=False,
             type=check_quality,
         )
@@ -441,7 +446,7 @@ class Options:
             "-s",
             "--daysbacktostart",
             type=int,
-            help="Number of days back to start downloading videos from if running for the first time",
+            help="Number of days back to start downloading videos from if running for the first time (Default: 7)",
             required=False,
         )
 
@@ -450,7 +455,7 @@ class Options:
         if args.apikey:
             self.__api_key = args.apikey
         if args.directory:
-            self.__directory = pathlib.Path(args.directory)
+            self.__directory = pathlib.Path(args.directory).expanduser()
         if args.filtertitles:
             self.__filter_titles = args.filtertitles.split(",")
         if args.videoquality:
