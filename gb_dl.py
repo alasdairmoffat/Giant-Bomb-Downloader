@@ -266,7 +266,7 @@ class Giant_Bomb_Downloader:
 
         # re-initialise self.__videos ready to begin download process
         self.__videos = []
-        with textui.indent(4):
+        with textui.indent(2):
             textui.puts("Database Initialised")
 
     def download_videos(self):
@@ -307,14 +307,13 @@ class Giant_Bomb_Downloader:
             # set chunk_size to 1MB
             chunk_size = 1024 * 1024
             with open(temp_file, file_mode) as f:
-                with textui.indent(4):
-                    for chunk in textui.progress.bar(
-                        r.iter_content(chunk_size=chunk_size),
-                        expected_size=(r_length / chunk_size) + 1,
-                    ):
-                        if chunk:
-                            f.write(chunk)
-                            f.flush()
+                for chunk in textui.progress.bar(
+                    r.iter_content(chunk_size=chunk_size),
+                    expected_size=(r_length / chunk_size) + 1,
+                ):
+                    if chunk:
+                        f.write(chunk)
+                        f.flush()
 
             # Rename file and add to database if fully downloaded
             if total_length == temp_file.stat().st_size:
@@ -416,29 +415,29 @@ class Options:
                 )
             return value
 
-        parser = argparse.ArgumentParser(description="Download from Giant Bomb")
+        parser = argparse.ArgumentParser(description="Download Videos from Giant Bomb.")
         parser.add_argument(
             "-a",
             "--apikey",
-            help="Giant Bomb API key available from https://www.giantbomb.com/api/",
+            help="Giant Bomb API key. Available from https://www.giantbomb.com/api/",
             required=False,
         )
         parser.add_argument(
             "-d",
             "--directory",
-            help="Directory to store downloaded videos (Default: ./)",
+            help="Directory to store downloaded videos. (Default: ./)",
             required=False,
         )
         parser.add_argument(
             "-f",
             "--filtertitles",
-            help="List of show titles to skip seperated by commas (Wrap in '' if spaces required)",
+            help="List of show titles to skip seperated by commas. (Wrap in '' if spaces required)",
             required=False,
         )
         parser.add_argument(
             "-q",
             "--videoquality",
-            help="Video quality ('low', 'high' or 'hd') (Default: hd)",
+            help="Video quality ('low', 'high' or 'hd'). (Default: 'hd')",
             required=False,
             type=check_quality,
         )
@@ -446,7 +445,7 @@ class Options:
             "-s",
             "--daysbacktostart",
             type=int,
-            help="Number of days back to start downloading videos from if running for the first time (Default: 7)",
+            help="Number of days back to start downloading videos from if running for the first time. (Default: 7)",
             required=False,
         )
 
@@ -457,7 +456,9 @@ class Options:
         if args.directory:
             self.__directory = pathlib.Path(args.directory).expanduser()
         if args.filtertitles:
-            self.__filter_titles = args.filtertitles.split(",")
+            self.__filter_titles = [
+                title.strip() for title in args.filtertitles.split(",")
+            ]
         if args.videoquality:
             self.__video_quality = args.videoquality
         if args.daysbacktostart:
