@@ -4,6 +4,8 @@
 
 [![License](https://img.shields.io/:license-mit-blue.svg?style=flat-square)](https://badges.mit-license.org)
 
+![Demo Image](../assets/demo-image.png?raw=true)
+
 ## Table of Contents
 
 - [General Info](#general-info)

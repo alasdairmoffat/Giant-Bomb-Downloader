@@ -28,7 +28,7 @@ def exit_process():
 
 class Videos_Database:
     def __init__(self, directory):
-        """initialises databse connection
+        """initialises database connection
 
         Args:
             directory (pathlib.Path): path object where database is to be stored
@@ -67,8 +67,7 @@ class Videos_Database:
         return self.__cur.fetchone() != None
 
     def create_table(self):
-        """creates videos table
-        """
+        """creates videos table"""
         self.__cur.execute(
             (
                 "CREATE TABLE IF NOT EXISTS videos( "
@@ -208,8 +207,7 @@ class Giant_Bomb_Downloader:
         )
 
     def query_api(self, query_date=None):
-        """queries api for 100 most recent videos up to optional query_date
-        """
+        """queries api for 100 most recent videos up to optional query_date"""
         url = "https://www.giantbomb.com/api/videos/"
         params = {
             "api_key": self.__api_key,
@@ -270,8 +268,7 @@ class Giant_Bomb_Downloader:
             textui.puts("Database Initialised")
 
     def download_videos(self):
-        """Downloads all videos in self.__videos
-        """
+        """Downloads all videos in self.__videos"""
         num_videos = len(self.__videos)
 
         for count, video in enumerate(self.__videos, start=1):
@@ -321,8 +318,7 @@ class Giant_Bomb_Downloader:
                 self.__database.insert_video(**video)
 
     def skip_current_video(self):
-        """Add videos details to database so it will not be downloaded in the future
-        """
+        """Add videos details to database so it will not be downloaded in the future"""
         self.__database.insert_video(**self.__current_video)
         # Delete partially downloaded file
         (
@@ -331,8 +327,7 @@ class Giant_Bomb_Downloader:
         ).unlink()
 
     def prompt_for_skip(self):
-        """Handles user interrupt process
-        """
+        """Handles user interrupt process"""
         user_input = textui.prompt.options(
             "Do you want to skip the current video?",
             [
@@ -345,8 +340,7 @@ class Giant_Bomb_Downloader:
             self.skip_current_video()
 
     def start(self):
-        """Iniitalise process
-        """
+        """Iniitalise process"""
         try:
             textui.puts("Retrieving Videos...")
             self.query_api()
@@ -381,8 +375,7 @@ class Options:
         return quality in ["low", "high", "hd"]
 
     def read_config_file(self):
-        """Reads options from config file if present
-        """
+        """Reads options from config file if present"""
         config = configparser.ConfigParser()
         config.read(pathlib.Path.home() / ".gb_dl/gb_dl.config")
 
@@ -405,8 +398,7 @@ class Options:
             self.__days_back_to_start = gb_dl["days_back_to_start"]
 
     def create_cli_args(self):
-        """Handles cli argument parsing
-        """
+        """Handles cli argument parsing"""
 
         def check_quality(value):
             if not Options.validate_video_quality(value):
