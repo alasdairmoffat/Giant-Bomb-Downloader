@@ -1,4 +1,5 @@
 import pathlib
+import urllib
 import sqlite3
 import sys
 import os
@@ -226,6 +227,39 @@ class Giant_Bomb_Downloader:
 
         self.__videos = response.json()["results"]
 
+    @staticmethod
+    def find_valid_url(video):
+        """Finds a valid video url, not caring what video quality is
+
+        Args:
+            video (dict): video returned from api
+        """
+        return video["low_url"] or video["high_url"] or video["hd_url"]
+
+    def get_download_url(self, video):
+        """returns url for requested quality even if not surface in api response
+
+        Args:
+            video (dict): video returned from api
+
+        Returns:
+            string: url for video at requested quality
+        """
+        if video[f"{self.__video_quality}_url"]:
+            return video[f"{self.__video_quality}_url"]
+
+        bitrates = {"low": "1800", "high": "3200", "hd": "4000"}
+
+        valid_url = urllib.parse.urlparse(Giant_Bomb_Downloader.find_valid_url(video))
+
+        new_url = valid_url._replace(
+            path=valid_url.path[:-8]
+            + bitrates[self.__video_quality]
+            + valid_url.path[-4:]
+        )
+
+        return new_url.geturl()
+
     def parse_api_response(self, filter=True):
         """Turns self.__videos into usable form
 
@@ -237,10 +271,10 @@ class Giant_Bomb_Downloader:
                 "id": video["id"],
                 "name": Giant_Bomb_Downloader.correct_file_name(
                     video["name"],
-                    pathlib.Path(video[f"{self.__video_quality}_url"]).suffix,
+                    pathlib.Path(self.get_download_url(video)).suffix,
                 ),
                 "publish_date": video["publish_date"],
-                "url": video[f"{self.__video_quality}_url"],
+                "url": self.get_download_url(video),
             }
             for video in self.__videos
             if not filter
