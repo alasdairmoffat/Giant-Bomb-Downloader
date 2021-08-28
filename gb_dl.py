@@ -252,13 +252,16 @@ class Giant_Bomb_Downloader:
 
         valid_url = urllib.parse.urlparse(Giant_Bomb_Downloader.find_valid_url(video))
 
-        new_url = valid_url._replace(
-            path=valid_url.path[:-8]
-            + bitrates[self.__video_quality]
-            + valid_url.path[-4:]
-        )
+        if valid_url.path:
+            new_url = valid_url._replace(
+                path=valid_url.path[:-8]
+                + bitrates[self.__video_quality]
+                + valid_url.path[-4:]
+            )
 
-        return new_url.geturl()
+            return new_url.geturl()
+        else:
+            return None
 
     def parse_api_response(self, filter=True):
         """Turns self.__videos into usable form
@@ -266,21 +269,50 @@ class Giant_Bomb_Downloader:
         Args:
             filter (bool, optional): Whether to apply filter to videos. Defaults to True.
         """
-        self.__videos = [
-            {
-                "id": video["id"],
-                "name": Giant_Bomb_Downloader.correct_file_name(
-                    video["name"],
-                    pathlib.Path(self.get_download_url(video)).suffix,
-                ),
-                "publish_date": video["publish_date"],
-                "url": self.get_download_url(video),
-            }
+        # self.__videos = [
+        #     {
+        #         "id": video["id"],
+        #         "name": Giant_Bomb_Downloader.correct_file_name(
+        #             video["name"],
+        #             pathlib.Path(self.get_download_url(video)).suffix,
+        #         ),
+        #         "publish_date": video["publish_date"],
+        #         "url": self.get_download_url(video),
+        #     }
+        #     for video in self.__videos
+        #     if not filter
+        #     or self.filter_shows(video)
+        #     and not self.__database.check_for_video(video["id"])
+        # ]
+
+        filtered_videos = [
+            video
             for video in self.__videos
             if not filter
             or self.filter_shows(video)
             and not self.__database.check_for_video(video["id"])
         ]
+
+        self.__videos = []
+        for video in filtered_videos:
+            download_url = self.get_download_url(video)
+
+            if not download_url:
+                textui.puts("Skipping video for no valid URL:")
+                with textui.indent(4, quote="  -"):
+                    textui.puts(f"{video['name']}")
+
+            else:
+                self.__videos.append(
+                    {
+                        "id": video["id"],
+                        "name": Giant_Bomb_Downloader.correct_file_name(
+                            video["name"], pathlib.Path(download_url).suffix
+                        ),
+                        "publish_date": video["publish_date"],
+                        "url": download_url,
+                    }
+                )
 
         # Put vidoes in chronological order
         self.__videos.reverse()
