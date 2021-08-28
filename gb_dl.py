@@ -269,22 +269,6 @@ class Giant_Bomb_Downloader:
         Args:
             filter (bool, optional): Whether to apply filter to videos. Defaults to True.
         """
-        # self.__videos = [
-        #     {
-        #         "id": video["id"],
-        #         "name": Giant_Bomb_Downloader.correct_file_name(
-        #             video["name"],
-        #             pathlib.Path(self.get_download_url(video)).suffix,
-        #         ),
-        #         "publish_date": video["publish_date"],
-        #         "url": self.get_download_url(video),
-        #     }
-        #     for video in self.__videos
-        #     if not filter
-        #     or self.filter_shows(video)
-        #     and not self.__database.check_for_video(video["id"])
-        # ]
-
         filtered_videos = [
             video
             for video in self.__videos
@@ -298,7 +282,7 @@ class Giant_Bomb_Downloader:
             download_url = self.get_download_url(video)
 
             if not download_url:
-                textui.puts("Skipping video for no valid URL:")
+                textui.puts("Skipping video with no valid URL:")
                 with textui.indent(4, quote="  -"):
                     textui.puts(f"{video['name']}")
 
