@@ -99,7 +99,7 @@ class Videos_Database:
         # fmt: on
         return self.__cur.fetchone() != None
 
-    def insert_video(self, id, name, publish_date, url):
+    def insert_video(self, id, name, publish_date, url, show_title):
         """inserts video data into database
 
         Args:
@@ -295,6 +295,7 @@ class Giant_Bomb_Downloader:
                         ),
                         "publish_date": video["publish_date"],
                         "url": download_url,
+                        "show_title": video["video_show"]["title"],
                     }
                 )
 
@@ -341,7 +342,9 @@ class Giant_Bomb_Downloader:
 
             textui.puts(f"Downloading {count} of {num_videos}...")
             with textui.indent(4, quote="  -"):
-                textui.puts(f"{video['name']} : {video['publish_date']}")
+                textui.puts(
+                    f"{video['name']} : {video['publish_date']} ({video['show_title']})"
+                )
 
             params = {"api_key": self.__api_key}
             headers = {"Range": f"bytes={already_downloaded}-"}
