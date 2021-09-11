@@ -80,6 +80,26 @@ Clone from repository
 git clone https://github.com/alasdairmoffat/Giant-Bomb-Downloader.git
 ```
 
+Create virtual environment
+
+```bash
+cd Giant-Bomb-Downloader
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Install dependancies
+
+```bash
+pip install -r requirements.txt
+```
+
+Run downloader
+
+```bash
+python gb_dl.py
+```
+
 ## License
 
 > **[MIT license](https://opensource.org/licenses/mit-license.php)**
