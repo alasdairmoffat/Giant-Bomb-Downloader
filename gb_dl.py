@@ -169,7 +169,7 @@ class Giant_Bomb_Downloader:
                         ),
                         "publish_date": video["publish_date"],
                         "url": download_url,
-                        "show_title": video["video_show"]["title"],
+                        "show_title": video["video_show"]["title"] if video['video_show'] else '',
                     }
                 )
 
