@@ -1,0 +1,9 @@
+GET https://www.giantbomb.com/api/videos/
+  ?api_key=da092c1e6a0409346f8ba4d0409073cd1147f681
+  &format=json
+  
+  
+###
+
+HEAD https://static-giantbombvideo.cbsistatic.com/vr/2020/09/18/521732/mc_vinnyvania_09182020_2500.mp4
+  ?api_key=da092c1e6a0409346f8ba4d0409073cd1147f681
